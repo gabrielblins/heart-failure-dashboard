@@ -7,6 +7,10 @@ from eda import column_description, heart_df, valores, heart_df_new, a, fighist,
 from rmvnoise import heart_df_no_outlier, remove_outliers_code, valoresnout, fignout, figboxnout, fighistnout
 from trainandval import report_tree, tree_fig, figtreecm, figroc, sort_features_tree, report_rf, figrfcm, figrocrf, \
                         sort_features_rf, report_rf_time, report_rf_disc, report_rf_disc_time
+from bonus import objective_rf_code, study_rf, report_rf_best, figrfbestcm, figrocrfbest, pruned, complete, val_best, \
+                  trial_rf, optimization_hist_rf, parallel_coordinate_rf, sort_features_rf_best, report_svm, \
+                  report_svm_time, report_xgb, report_xgb_best, objective_code, finished, Value, trial, \
+                  optimization_hist_xgb, parallel_coordinate_xgb, figxgbbestcm, figrocxgbbest, sort_features_xgb_best
 
 
 class Toc:
@@ -69,6 +73,7 @@ check_box_eda = st.sidebar.checkbox(label="Show Exploratory Data Analysis", valu
 check_box_noise = st.sidebar.checkbox(label="Show Removing noise from data", value=val)
 check_box_tv = st.sidebar.checkbox(label="Show Training and Validation", value=val)
 check_box_bn = st.sidebar.checkbox(label="Show Bonus Section", value=val)
+check_box_conc = st.sidebar.checkbox(label="Show Conclusion", value=val)
 
 if check_box_col:
     toc.header('Dataset description')
@@ -391,7 +396,7 @@ for column in X_test_t.columns.to_list():
              ', sendo um modelo mais interessante para fazer ajustes de hiperparâmetros e obter melhores resultados.')
     st.pyplot(figrocrf, transparent=True)
     toc.subheader3('Feature importances for the Random Forest classifier')
-    st.write('Ordem de importância dos atributos usando a Decision Tree:')
+    st.write('Ordem de importância dos atributos usando a Random Forest:')
     for key,value in zip(sort_features_rf.keys(), sort_features_rf.values()):
         st.write(f'{key}:',value)
 
@@ -413,10 +418,158 @@ for column in X_test_t.columns.to_list():
             'classification_report(y_test_t,y_pred)')
     st.table(pd.DataFrame(report_rf_disc_time).T)
     st.write('Observando os resultados obtidos, é possível perceber que o modelo fica melhor usando o atributo \'time\''
-             'e sem discretizar os atributos contínuos. Sendo assim, para as próximas etapas será usado o conjunto de '
+             ' e sem discretizar os atributos contínuos. Sendo assim, para as próximas etapas será usado o conjunto de '
              'dados contendo o atributo \'time\'')
-#
-# if check_box_bn:
+
+if check_box_bn:
+    toc.header('Bonus Section')
+    st.markdown('---')
+    toc.subheader('Hyperparameter tuning to get better scores')
+    st.write('Para fazer o ajuste dos hiperparâmetros existem algumas funções, a mais conhecida delas é o GridSearch do'
+             ' Scikit-Learn, que vai procurar por todas as combinações possíveis de hiperparâmetros que o usuário '
+             'passar, porém acaba sendo muito custoso computacionalmente, sendo mais vantajoso utilizar o RandomSearch,'
+             'também do Scikit, esse método pode não obter o melhor conjunto possível de hiperparâmetros, mas retornará'
+             ' um muito bom, em um tempo menor. Além desses dois citados, existem algumas bibliotecas especializadas em'
+             'tuning de hiperparâmetros, entre elas a biblioteca Optuna, essa biblioteca consegue de forma bem mais '
+             'eficiente encontrar os melhores hiperparâmetros.')
+    toc.subheader2('Using optuna to find the best hyperparameters for Random Forest')
+    st.write('Para usar o Optuna, é necessário criar uma função objetivo, apontando todos os hiperparâmetros de '
+             'interesse e o método de avaliação do modelo. Para o modelo Random Forest serão ajustados os '
+             'hiperparâmetros \'n_estimators\', \'max_depth\', \'max_features\', \'min_samples_split\' e '
+             '\'min_samples_leaf\'. Para avaliar o modelo será usado o método de Cross Validation usando o F1 score '
+             'como métrica de desempenho. Por fim, está sendo avaliado se as árvores de decisão da Random Forest estão '
+             'criando "galhos" desnecessários, que podem trazer um sobreajuste para o modelo, para lidar com esses '
+             'galhos, está sendo usado o método de Prune (Podar), que descarta essas Florestas com overfitting.')
+    ch_objrf = st.checkbox(label='Show objective_rf code')
+    if ch_objrf:
+        st.code(objective_rf_code)
+    st.write('Agora basta criar um novo estudo do optuna.')
+    st.code('study_rf = optuna.create_study(direction="maximize")\n'
+            'study_rf.optimize(objective_rf, n_trials=500, timeout=300)')
+    st.write(f'Número de trials concluídas: {len(study_rf.trials)}')
+    st.write(pruned)
+    st.write(complete)
+    st.write('Best Trial: ')
+    st.write(val_best)
+    st.write('  Params: ')
+    for key, value in trial_rf.params.items():
+        st.write("    {}: {}".format(key, value))
+    st.plotly_chart(optimization_hist_rf)
+    st.plotly_chart(parallel_coordinate_rf)
+
+    st.write('Agora possuindo os melhores hiperparâmetros, pode-se construir o melhor modelo de Random Forest (Nesse '
+             'modelo, fiz uns testes mantendo alguns dos hiperparâmetros e alterando o \'n_estimators\' e o '
+             '\'min_samples_leaf\', consegui obter o melhor resultado.)')
+    st.code('clf_rf_best = RandomForestClassifier(n_estimators=140, max_depth=12, max_features=\'auto\', '
+            'min_samples_split=3, min_samples_leaf=2, random_state=5)\n'
+            'clf_rf_best.fit(X_train_res_t,y_train_res_t)')
+    st.code('y_pred_b = clf_rf_best.predict(X_test_t)\n'
+            'classification_report(y_test_t, y_pred_b)')
+    st.table(pd.DataFrame(report_rf_best).T)
+    st.write('Com o ajuste dos hiperparâmetros o F1 Score foi melhorado, em consequência do aumento da precisão em '
+             'relação a Random Forest ajustada usando o atributo \'time\' mas sem ajuste de hiperparâmetros.')
+    toc.subheader3('Confusion Matrix for Best Random Forest Model')
+    st.pyplot(figrfbestcm, transparent=True)
+    toc.subheader3('ROC curve for Best Random Forest Model')
+    st.pyplot(figrocrfbest, transparent=True)
+    st.write('Com o ajuste de hiperparâmetros e boa seleção de features foi possível aumentar o AUC score em 7% em '
+             'relação ao modelo Random Forest inicial.')
+    toc.subheader3('Feature importances for Best Random Forest Model')
+    st.write('Ordem de importância dos atributos usando a melhor Random Forest:')
+    for key,value in zip(sort_features_rf_best.keys(), sort_features_rf_best.values()):
+        st.write(f'{key}:',value)
+
+    toc.subheader('Evaluating other models')
+    st.write('Agora serão usados 2 diferentes modelos, para observar se há alguma melhora em relação aos modelos '
+             'anteriores. O primeiro será um classificador usando Support Vector Machine, o segundo será um modelo '
+             'usando o Extreme Gradient Boosting (XGBoost)')
+    toc.subheader2('Using SVC to predict the target')
+    st.write('Para o SVC é necessário usar o conjunto de dados normalizado, pois as SVM são sensíveis a atributos em '
+             'diferentes escalas.')
+    st.markdown('* Sem o atributo \'time\'')
+    st.code('from sklearn.svm import SVC\n'
+            'svm = SVC(random_state=5)\n'
+            'svm.fit(X_train_s_res, y_train_s)')
+    st.code('y_pred = svm.predict(X_test_s)\n'
+            'classification_report(y_test, y_pred)')
+    st.table(pd.DataFrame(report_svm).T)
+    st.markdown('* Com o atributo \'time\'')
+    st.code('svm.fit(X_train_st_res, y_train_st)\n'''
+            'y_pred = svm.predict(X_test_st)\n'
+            'classification_report(y_test_t, y_pred)')
+    st.table(pd.DataFrame(report_svm_time).T)
+    st.write('O modelo SVC sem a feature \'time\' performou melhor que a Decision Tree e praticamente igual a '
+             'Random Forest inicial. Já com a feature \'time\', obteve o mesmo resultado que a Random Forest com esse '
+             'atributo. Sendo assim, modelos usando SVM são potenciais classificadores para esse problema.')
+
+    toc.subheader2('Using XGBoost')
+    st.write('O modelo XGBoost é um modelo ensemble, ou seja, junta um conjunto de modelos para gerar o resultado, '
+             'ele utiliza o método de Boosting de gradiente para conseguir atingir melhores resultados. Atualmente é c'
+             'onsiderado o \'state-of-the-art\' para conjuntos de dados tabulares')
+    st.code('from xgboost import XGBClassifier\n'
+            'xgb = XGBClassifier(learning_rate=0.01, n_estimators=180, random_state=5)\n'
+            'xgb.fit(X_train_res_t, y_train_res_t)')
+    st.code('y_pred = xgb.predict(X_test_t)\n'
+            'classification_report(y_test_t, y_pred)')
+    st.table(pd.DataFrame(report_xgb).T)
+    st.write('Sem tuning de hiperparâmetros o modelo XGBoost obteve resultados similares ao SVM.')
+
+    toc.subheader3('Tuning XGBoost hyperparameters')
+    st.write('Assim como para a Random Forest, é necessário criar uma função objetivo para o XGBoost. Nessa função '
+             'objetivo foi utilizada a métrica F1 Score.')
+    ch_objxgb = st.checkbox(label='Show Objective function for XGBoost')
+    if ch_objxgb:
+        st.code(objective_code)
+    st.write('Agora basta criar um novo estudo do optuna para o XGBoost.')
+    st.code('study = optuna.create_study(direction="maximize")\n'
+            'study.optimize(objective_rf, n_trials=500, timeout=300)')
+    st.write(finished)
+    st.write('Best Trial: ')
+    st.write(Value)
+    st.write(' Params:')
+    for key, value in trial.params.items():
+        st.write("    {}: {}".format(key, value))
+    st.plotly_chart(optimization_hist_xgb)
+    st.plotly_chart(parallel_coordinate_xgb)
+    st.write('Agora pode-se construir o melhor modelo usando XGBoost')
+    st.code('best_param_xgb = trial.params\n'
+            'best_param_xgb["verbosity"] = 0\n'
+            'best_param_xgb["objective"] = "binary:logistic"\n'
+            'best_param_xgb["tree_method"] = "exact"')
+    st.code('xgb_best = XGBClassifier(**best_param_xgb)\n'
+            'xgb_best.fit(X_train_res_t,y_train_res_t)')
+    st.code('y_pred_best = xgb_best.predict(X_test_t)\n'
+            'classification_report(y_test_t,y_pred_best)')
+    st.table(pd.DataFrame(report_xgb_best).T)
+    st.write('Houve melhora significativa, tanto para a precisão como para o recall, gerando um F1 Score também melhor,'
+             ' e, consequentemente, uma acurácia melhor.')
+    toc.subheader3('Confusion Matrix for Best XGBoost Model')
+    st.pyplot(figxgbbestcm, transparent=True)
+    toc.subheader3('ROC curve for Best XGBoost Model')
+    st.pyplot(figrocxgbbest, transparent=True)
+    st.write('Como esperado, o XGBoost foi o modelo que se saiu melhor entre todos os outros, conseguindo ficando na '
+             'frente do melhor modelo de Random Forest em 3%. Com mais tempo, é possível aprimorá-lo ainda mais, com '
+             'técnicas de feature engineering e processamento dos dados.')
+    toc.subheader3('Feature importances for Best XGBoost Model')
+    st.write('Ordem de importância dos atributos usando o melhor XGBoost:')
+    for key,value in zip(sort_features_xgb_best.keys(), sort_features_xgb_best.values()):
+        st.write(f'{key}:',value)
+
+if check_box_conc:
+    toc.header('Conclusion')
+    st.markdown('---')
+    st.write('Como foi mostrado inicialmente, as features com maiores correlações com a variável de saída estiveram '
+             'sempre no topo de importância para os modelos testados. Sendo elas: \'time\', \'serum_creatinine\', '
+             '\'ejection_fraction\', \'age\' e \'serum_sodium\'. Removendo o atributo \'time\' dessa lista, ficamos '
+             'apenas com atributos biólogicos, sendo assim, pode ser realizado um estudo mais aprofundado acerca desses'
+             'atributos para analisar o quanto eles realmente impactam na insuficiência cardíaca, podendo-se criar '
+             'meios de tratamento que lidem diretamente com esses atributos.')
+    st.write('')
+    st.write('Obrigado!')
+    st.write('Trabalho Desenvolvido por Gabriel Barros Lins')
+
+
+
 
 toc.generate()
 
