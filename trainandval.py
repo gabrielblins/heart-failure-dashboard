@@ -19,6 +19,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.metrics import auc, roc_curve
 from sklearn.metrics import RocCurveDisplay
 from sklearn.ensemble import RandomForestClassifier
+from rmvnoise import heart_df_no_outlier, columns_continuous
 import joblib as job
 warnings.filterwarnings('ignore')
 
@@ -112,28 +113,35 @@ X_train_st_res, y_train_st = smote.fit_resample(X_train_st,y_train_t)
 
 clf_tree = DecisionTreeClassifier(random_state=5, max_depth=5)
 clf_tree.fit(X_train_res,y_train_res)
-print(classification_report(y_test,clf_tree.predict(X_test)))
-plt.figure(figsize=(30,20))
-plot_tree(clf_tree, feature_names=X_train_res.columns.to_list(), class_names=['Recovered', 'Died'], fontsize=9.5)
+report_tree = classification_report(y_test, clf_tree.predict(X_test), output_dict=True)
+tree_fig = plt.figure(figsize=(30,20))
+ax = tree_fig.add_subplot(1,1,1)
+plot_tree(clf_tree, feature_names=X_train_res.columns.to_list(), class_names=['Recovered', 'Died'], fontsize=13, ax=ax)
 plt.savefig('tree.png')
-plt.show()
+#plt.show()
 
 """##### Confusion Matrix for decision tree"""
 
-plt.figure(figsize=(8,6))
-sns.heatmap(confusion_matrix(y_test, clf_tree.predict(X_test)),cmap='viridis', annot=True)
+figtreecm = plt.figure(figsize=(8,6))
+ax = figtreecm.add_subplot(1,1,1)
+sns.heatmap(confusion_matrix(y_test, clf_tree.predict(X_test)),cmap='viridis', annot=True, ax=ax)
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
-plt.show()
+#plt.show()
 
 """##### ROC curve for Decision Tree"""
-
+figroc = plt.figure()
+ax = figroc.add_subplot(1,1,1)
 fpr, tpr, thresholds = roc_curve(y_test,clf_tree.predict(X_test))
 roc_auc = auc(fpr,tpr)
-roc = RocCurveDisplay(fpr=fpr,tpr=tpr,roc_auc=roc_auc)
-roc.plot()
+roctree = RocCurveDisplay(fpr=fpr,tpr=tpr,roc_auc=roc_auc)
+#roctreea = RocCurveDisplay.from_estimator(clf_tree, X_test, y_test, ax=ax)
+ax.plot([0,1],[0,1], '--')
+roctree.plot(ax=ax)
 plt.title('ROC Curve with AUC score for Decision Tree ')
-plt.show()
+plt.xlim([0,1.03])
+plt.ylim([0,1.03])
+#plt.show()
 
 """##### Feature importances for the decision tree classifier"""
 
@@ -145,35 +153,40 @@ features_importances = {}
 for key,value in zip(features,features_val):
     features_importances[key] = value
 
-sort_features = dict(sorted(features_importances.items(), key=lambda item: item[1], reverse=True))
+sort_features_tree = dict(sorted(features_importances.items(), key=lambda item: item[1], reverse=True))
 
-print('Feature Importances for Decision Tree:\n')
-for key,value in zip(sort_features.keys(), sort_features.values()):
-    print(f'{key}:',value)
+# print('Feature Importances for Decision Tree:\n')
+# for key,value in zip(sort_features_tree.keys(), sort_features_tree.values()):
+    # print(f'{key}:',value)
 
 """#### Using Random Forest to improve the score
 * As expected, the scores were better
 """
 
-clf_rf = RandomForestClassifier(random_state=5)#, max_depth=8, n_estimators=100)
+clf_rf = RandomForestClassifier(random_state=5)
 clf_rf.fit(X_train_res,y_train_res)
-print(classification_report(y_test,clf_rf.predict(X_test)))
+report_rf = classification_report(y_test,clf_rf.predict(X_test), output_dict=True)
 
 """##### Confusion matrix for Random Forest"""
 
-plt.figure(figsize=(8,6))
-sns.heatmap(confusion_matrix(y_test, clf_rf.predict(X_test)),cmap='viridis', annot=True)
+figrfcm = plt.figure(figsize=(8,6))
+ax = figrfcm.add_subplot(1,1,1)
+rf_cm = sns.heatmap(confusion_matrix(y_test, clf_rf.predict(X_test)),cmap='viridis', annot=True, ax=ax)
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
 
 """##### ROC curve for Random Forest"""
-
+figrocrf = plt.figure()
+ax = figrocrf.add_subplot(1,1,1)
 fpr, tpr, thresholds = roc_curve(y_test,clf_rf.predict(X_test))
 roc_auc = auc(fpr,tpr)
-roc = RocCurveDisplay(fpr=fpr,tpr=tpr,roc_auc=roc_auc)
-roc.plot()
+rocrf = RocCurveDisplay(fpr=fpr,tpr=tpr,roc_auc=roc_auc)
+ax.plot([0,1],[0,1], '--')
+rocrf.plot(ax=ax)
 plt.title('ROC Curve with AUC score for Random Forest')
-plt.show()
+plt.xlim([0,1.03])
+plt.ylim([0,1.03])
+#plt.show()
 
 """##### Features Importances for Random Forest"""
 
@@ -185,10 +198,10 @@ features_importances = {}
 for key,value in zip(features,features_val):
     features_importances[key] = value
 
-sort_features = dict(sorted(features_importances.items(), key=lambda item: item[1], reverse=True))
+sort_features_rf = dict(sorted(features_importances.items(), key=lambda item: item[1], reverse=True))
 
-for key,value in zip(sort_features.keys(), sort_features.values()):
-    print(f'{key}:',value)
+# for key,value in zip(sort_features.keys(), sort_features.values()):
+    # print(f'{key}:',value)
 
 """### Trying to improve the scores using the other train/test sets
 
@@ -197,16 +210,16 @@ for key,value in zip(sort_features.keys(), sort_features.values()):
 
 clf_rf.fit(X_train_res_t,y_train_res_t)
 y_pred = clf_rf.predict(X_test_t)
-print(classification_report(y_test_t,y_pred))
+report_rf_time = classification_report(y_test_t,y_pred, output_dict=True)
 
 """* Without Time, Discretized"""
 
 clf_rf.fit(X_train_d_res,y_train_d)
 y_pred = clf_rf.predict(X_test_d)
-print(classification_report(y_test,y_pred))
+report_rf_disc = classification_report(y_test,y_pred,output_dict=True)
 
 """* With Time, Discretized"""
 
 clf_rf.fit(X_train_dt_res,y_train_dt)
 y_pred = clf_rf.predict(X_test_dt)
-print(classification_report(y_test_t,y_pred))
+report_rf_disc_time = classification_report(y_test_t,y_pred,output_dict=True)

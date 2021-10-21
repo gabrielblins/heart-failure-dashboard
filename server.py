@@ -1,9 +1,12 @@
+import pandas as pd
 import streamlit as st
 import missingno as msno
 import matplotlib.pyplot as plt
 import seaborn as sns
 from eda import column_description, heart_df, valores, heart_df_new, a, fighist, figbox
 from rmvnoise import heart_df_no_outlier, remove_outliers_code, valoresnout, fignout, figboxnout, fighistnout
+from trainandval import report_tree, tree_fig, figtreecm, figroc, sort_features_tree, report_rf, figrfcm, figrocrf, \
+                        sort_features_rf, report_rf_time, report_rf_disc, report_rf_disc_time
 
 
 class Toc:
@@ -211,10 +214,207 @@ if check_box_noise:
     toc.subheader2('Looking at Probability Distribution for continuous features')
     st.pyplot(fighistnout, transparent=True)
 
+if check_box_tv:
+    toc.header('Training and Validation')
+    st.markdown('---')
 
+    st.subheader('Choosing our features and setting our target')
+    st.write('Agora é preciso dividir nossos dados em entrada(X) e saída(y), nesse caso o X são todas as features'
+             'exceto os atributos \'time\' e \'DEATH_EVENT\', para ser possível avaliar nosso modelo apenas com dados '
+             'relacionados as condições fisiologicas e estilo de vida do paciente. Já o X_t contém o tempo de '
+             'acompanhamento para que seja possível analisar o quanto esse atributo influencia no score dos modelos')
+    st.code('X = heart_df_no_outlier.drop([\'DEATH_EVENT\',\'time\'], axis=1)\n'
+            'X_t = heart_df_no_outlier.drop(\'DEATH_EVENT\', axis=1)\n'
+            'y = heart_df_no_outlier[\'DEATH_EVENT\']')
 
-#
-# if check_box_tv:
+    st.subheader('Splitting our data into training and test')
+    st.write('Os dados foram dividos em treino e teste usando a função train_test_split da biblioteca Scikit-Learn, um '
+             'grupo sem o atributo \'time\' e o outro com esse atributo.')
+    st.write('Foi utilizado a divisão 70% para treino e 30% para teste, além disso, foi utilizado o parâmetro '
+             'stratify=y para que se mantenha a proporção da variável de saída nos dados de treino e de teste.')
+    st.code('X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.3, random_state=5, stratify=y)\n'
+            'X_train_t, X_test_t, y_train_t, y_test_t = train_test_split(X_t,y,test_size=.3,random_state=5,stratify=y)')
+
+    toc.subheader('Data Pre-Processing')
+    st.write('Nessa etapa são gerados mais 4 tipos de dados de treino e teste a partir dos dados que já foram gerados'
+             ', 2 deles para os dados sem o atributo \'time\' e 2 para os dados com esse atributo. (Sempre importante '
+             'lembrar que esses transformadores só devem ser ajustados (.fit) nos dados de treino, para não ter nenhum '
+             'viés dos dados de teste')
+    toc.subheader2('Scaling the data')
+    st.write('Aqui ocorre a normalização dos dados de treino e teste usando a função MinMaxScaler da biblioteca '
+             'Scikit-Learn, gerando dois novos conjunto de dados, um sem o atributo \'time\' e outro com esse atributo.'
+             ' Isso é necessário para que todas as features estejam na mesma escala, solucionando o problema da grande '
+             'diferença de variância entre os atributos')
+    st.code('scaler = MinMaxScaler()')
+    st.code('# Scaled without Time\n'
+            'X_train_s = pd.DataFrame(scaler.fit_transform(X_train),columns=X_train.columns.to_list())\n'
+            'X_test_s = pd.DataFrame(scaler.transform(X_test), columns=X_test.columns.to_list())\n'
+            '# Scaled with Time\n'
+            'X_train_st = pd.DataFrame(scaler.fit_transform(X_train_t), columns=X_train_t.columns.to_list())\n'
+            'X_test_st = pd.DataFrame(scaler.transform(X_test_t), columns=X_test_t.columns.to_list())')
+    toc.subheader2('Discretizing the data')
+    st.write('Aqui são gerados mais dois conjuntos de dados, dessa vez aplicando uma técnica de discretização das '
+             'variáveis contínuas usando a função EqualFrequencyDiscretiser da biblioteca Feature Engine, pode ser que '
+             'isso traga melhores resultados para os nossos modelos')
+    st.code('discretizer = EqualFrequencyDiscretiser(variables=columns_continuous_not, q=8)\n'
+            'discretizer_t = EqualFrequencyDiscretiser(variables=columns_continuous, q=8)')
+    ch_disc = st.checkbox(label='Show fit and transform for discretizer')
+    if ch_disc:
+        st.code(
+"""
+#Discrete without Time
+discrete = discretizer.fit_transform(X_train)
+X_train_d = pd.DataFrame()
+for column in X_train.columns.to_list():
+    if column in discrete.columns.to_list():
+        X_train_d[column] = discrete[column]
+    else:
+        X_train_d[column] = X_train[column]
+discrete_test = discretizer.transform(X_test)
+X_test_d = pd.DataFrame()
+for column in X_test.columns.to_list():
+    if column in discrete_test.columns.to_list():
+        X_test_d[column] = discrete_test[column]
+    else:
+        X_test_d[column] = X_test[column]
+
+# Discrete with Time
+discrete_t = discretizer_t.fit_transform(X_train_t)
+X_train_dt = pd.DataFrame()
+for column in X_train_t.columns.to_list():
+    if column in discrete_t.columns.to_list():
+        X_train_dt[column] = discrete_t[column]
+    else:
+        X_train_dt[column] = X_train_t[column]
+discrete_test_t = discretizer_t.transform(X_test_t)
+X_test_dt = pd.DataFrame()
+for column in X_test_t.columns.to_list():
+    if column in discrete_test_t.columns.to_list():
+        X_test_dt[column] = discrete_test_t[column]
+    else:
+        X_test_dt[column] = X_test_t[column]
+"""
+                )
+
+    toc.subheader2('Applying SMOTE to handle with imbalanced data')
+    st.write('Para lidar com o problema de desbalanceamento da variável de saída foi utilizado o método de oversampling'
+             'SMOTE (Synthetic Minority Over-sampling Technique) para gerar novas instâncias sintéticas para a classe '
+             'minoritária, esse método funciona usando a técnica de K vizinhos mais próximos para selecionar exemplos '
+             'que estejam próximos no espaço de atributos, desenhando uma linha entre os exemplos e, a partir disso, '
+             'gera uma nova instância da classe minoritária em algum ponto dessa linha.')
+    st.write('Aqui são usadas duas funções da biblioteca Imbalanced-Learn, criadas a partir do SMOTE, a SMOTENC'
+             ', que funciona com os atributos contínuos e categóricos, e a SMOTEN que deve ser usada apenas para dados'
+             'categóricos. (Importante lembrar que o oversampling só pode ser aplicado nos dados de treino)')
+    st.markdown('* Para os conjuntos onde não foi aplicado a discretização foi usada a função SMOTENC. Foi passado o '
+                'parâmetro categorical_features com a posição das features categóricas presentes.')
+    st.code('smote = SMOTENC(categorical_features= [1, 4, 8],random_state=5)\n'
+            '# Sem scaling\n'
+            'X_train_res, y_train_res = smote.fit_resample(X_train,y_train)\n'
+            'X_train_res_t, y_train_res_t = smote.fit_resample(X_train_t,y_train_t)\n'
+            '# Com scaling\n'
+            'X_train_s_res, y_train_s = smote.fit_resample(X_train_s,y_train)\n'
+            'X_train_st_res, y_train_st = smote.fit_resample(X_train_st,y_train_t)')
+    st.markdown('* Para os conjuntos de treino onde foi aplicado a discretização foi usada a função SMOTEN')
+    st.code('X_train_d_res, y_train_d = smotec.fit_resample(X_train_d,y_train)\n'
+            'X_train_dt_res, y_train_dt = smotec.fit_resample(X_train_dt,y_train_t)')
+
+    toc.subheader('Choosing the best Tree based model')
+    st.write('Nessa etapa, é feito um estudo com os modelos baseados em árvore mais comuns, as Decision Trees e as '
+             'Random Forests')
+    toc.subheader2('Using Decision Tree to make the initial classification')
+    st.write('As árvores de decisão são modelos de aprendizado supervisionado que podem ser usados tanto para '
+             'classificação como para regressão. As Decision Trees buscam gerar um modelo que preveja a variável target'
+             ', aprendendo regras de decisão simples inferidas das features do conjunto de dados. É um modelo que pode '
+             'ser chamado de "Caixa Branca" devido por gerarem resultados intuitivos e de fácil interpretação.')
+    st.write('Será utilizado o modelo DecisionTreeClassifier da biblioteca Scikit-Learn. Foi utilizado o parâmetro '
+             'max_depth = 5 para mais fácil visualização dos resultados.')
+    st.code('clf_tree = DecisionTreeClassifier(random_state=5, max_depth=5)\n'
+            'clf_tree.fit(X_train_res,y_train_res)')
+    st.write('Após ajustar o modelo clf_tree aos dados de treino pode-se avaliar o modelo usando os dados de teste. '
+             'Para avaliar o modelo está sendo utilizada a função classification_report da biblioteca Scikit-Learn, que'
+             'apresenta várias métricas úteis para avaliar modelos de classificação.')
+    st.code('y_pred = clf_tree.predict(X_test)\n'
+            'classification_report(y_test,y_pred)')
+    st.table(pd.DataFrame(report_tree).T)
+    st.write('Pode-se observar que o modelo clf_tree está com cerca de 74% de acurácia, porém essa métrica não é a '
+             'melhor para avaliar conjunto de dados desbalanceados, para uma maior certeza da validade do modelo é '
+             'possível observar o F1 Score, definido pela média harmônica entre precisão e recall, onde a precisão vai '
+             'dizer o quão bem o modelo está acertando a classe positiva (nesse caso quando o paciente morre), já o '
+             'recall(sensibilidade) vai indicar que porcentagem dos valores previstos como positivo é realmente '
+             'positivo, é uma métrica muito útil em casos onde os falsos negativos(positivos que foram classificados '
+             'como negativos) são importantes para a análise. Nesse estudo de caso, o recall é de extrema importância, '
+             'pois se um paciente tiver uma alta chance de vir a óbito por insuficiência cardíaca e for classificado '
+             'como \'Não vai falecer\' será um grande problema, já que ele não receberá o tratamento adequado, '
+             'aumentando mais ainda as chances de óbito.')
+    toc.subheader3('Plotting the Decision Tree choices')
+    st.pyplot(tree_fig, transparent=True)
+    toc.subheader3('Confusion Matrix for decision tree')
+    st.pyplot(figtreecm, transparent=True)
+    toc.subheader3('ROC curve for Decision Tree')
+    st.write('A área abaixo da curva (AUC) ROC é outra boa métrica para avaliar modelos desbalanceados, já que ela não '
+             'depende da distribuição da variável de saída, a curva ROC mostra o trade-off entre o True Positive Rate '
+             '(sensibilidade) e o False Positive Rate (1 - especificidade), sendo assim, quanto mais '
+             'próximo a curva estiver do canto superior esquerdo, melhor é o nosso modelo. Usa-se a AUC como uma forma'
+             ' de resumir a ROC em uma única métrica. No caso do modelo usando Árvore de Decisão foi obtido um AUC de'
+             '0.7, ou seja para cerca de 70% dos casos de teste o modelo consegue distinguir corretamente entre '
+             'pacientes que não faleceram (0) e que faleceram(1)')
+    st.pyplot(figroc, transparent=True)
+    toc.subheader3('Feature importances for the decision tree classifier')
+    st.write('Além das métricas, é possível observar quais atributos estão sendo mais importantes para o modelo efetuar'
+             ' a classificação.')
+    st.write('Ordem de importância dos atributos usando a Decision Tree:')
+    for key,value in zip(sort_features_tree.keys(), sort_features_tree.values()):
+        st.write(f'{key}:',value)
+
+    toc.subheader2('Using Random Forest to improve the score')
+    st.write('As Random Forests são um conjunto de árvores de decisão, cada árvore nesse conjunto é ajustada com uma '
+             'amostra diferente dos dados de treino com reposição usando usando Bootstrap como método de reamostragem.'
+             ' Para determinar a classe de saída as Random Forests calculam a média das probabilidades e escolhem a '
+             'classe que possuir a maior média. As Random Forests normalmente se saem melhor em relação as árvores de '
+             'decisão, pois a combinação de várias árvores faz com que haja uma redução significativa na variância, a '
+             'custo de um pequeno aumento no viés do modelo, o que leva a uma melhor generalização dos dados de treino,'
+             ' o que resulta num modelo melhor.')
+    st.code('clf_rf = RandomForestClassifier(random_state=5)\n'
+            'clf_rf.fit(X_train_res,y_train_res)')
+    st.write('Após ajustar o modelo clf_rf aos dados de treino pode-se avaliar o modelo usando os dados de teste. Mais'
+             'uma vez foi usada as métricas providas pela função classification_report do Scikit')
+    st.code('y_pred = clf_rf.predict(X_test)\n'
+            'classification_report(y_test,y_pred)')
+    st.table(pd.DataFrame(report_rf).T)
+    st.write('Apesar do recall ter permanecido o mesmo, houve um aumento considerável na precisão, consequentemente, '
+             'o modelo clf_rf obteve um melhor F1 Score em relação ao modelo anterior usando árvore de decisão e também'
+             'obteve uma melhor acurácia.')
+    toc.subheader3('Confusion Matrix for Random Forest')
+    st.pyplot(figrfcm, transparent=True)
+    toc.subheader3('ROC curve for Random Forest')
+    st.write('Como esperado pelas métricas anteriores, o valor de AUC para o modelo usando Random Forest aumentou em 3%'
+             ', sendo um modelo mais interessante para fazer ajustes de hiperparâmetros e obter melhores resultados.')
+    st.pyplot(figrocrf, transparent=True)
+    toc.subheader3('Feature importances for the Random Forest classifier')
+    st.write('Ordem de importância dos atributos usando a Decision Tree:')
+    for key,value in zip(sort_features_rf.keys(), sort_features_rf.values()):
+        st.write(f'{key}:',value)
+
+    toc.subheader('Trying to improve the scores using the other train/test sets')
+    st.write('Agora que o modelo base já foi escolhido, vale a pena testar os outros conjuntos de treino.')
+    st.markdown('* Usando o atributo \'time\'')
+    st.code('clf_rf.fit(X_train_res_t,y_train_res_t)\n'
+            'y_pred = clf_rf.predict(X_test_t)\n'
+            'classification_report(y_test_t,y_pred)')
+    st.table(pd.DataFrame(report_rf_time).T)
+    st.markdown('* Sem o atributo \'time\', Discretizado')
+    st.code('clf_rf.fit(X_train_d_res,y_train_d)\n'
+            'y_pred = clf_rf.predict(X_test_d)\n'
+            'classification_report(y_test,y_pred)')
+    st.table(pd.DataFrame(report_rf_disc).T)
+    st.markdown('* Usando o atributo \'time\', Discretizado')
+    st.code('clf_rf.fit(X_train_dt_res,y_train_dt)\n'
+            'y_pred = clf_rf.predict(X_test_dt)\n'
+            'classification_report(y_test_t,y_pred)')
+    st.table(pd.DataFrame(report_rf_disc_time).T)
+    st.write('Observando os resultados obtidos, é possível perceber que o modelo fica melhor usando o atributo \'time\''
+             'e sem discretizar os atributos contínuos. Sendo assim, para as próximas etapas será usado o conjunto de '
+             'dados contendo o atributo \'time\'')
 #
 # if check_box_bn:
 
