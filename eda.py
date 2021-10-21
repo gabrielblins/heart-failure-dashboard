@@ -22,8 +22,7 @@ from sklearn.ensemble import RandomForestClassifier
 import joblib as job
 warnings.filterwarnings('ignore')
 
-"""## Dataset description
----
+column_description = """
 
 | Feature                  | Explanation                                               | Measurement      | Range               |
 |--------------------------|-----------------------------------------------------------|------------------|---------------------|
@@ -51,73 +50,73 @@ warnings.filterwarnings('ignore')
 
 DATA_PATH = "Dados/heart_failure_clinical_records_dataset.csv"
 heart_df = pd.read_csv(DATA_PATH)
-heart_df.head()
+# heart_df.head()
 
 """### Looking the data shape
 * The dataset has 299 instances and 13 features/variables
 """
 
-heart_df.shape
+# heart_df.shape
 
 """### Checking features data types
 * The features are already numerical, so isn't necessary to apply object to numerical conversion
 """
 
-heart_df.info()
+# heart_df.info()
 
 """### Statistical description of the dataset"""
 
-heart_df.describe()
+# heart_df.describe()
 
 """### Checking for missing values
 * The dataset don't have missing values
 """
 
-msno.bar(heart_df)
+# msno.bar(heart_df)
 
 """### Looking at the target variable (DEATH_EVENT)
 * The target output is imbalanced
 """
 
-heart_df.DEATH_EVENT.value_counts()
+# heart_df.DEATH_EVENT.value_counts()
 
 """#### Count plot of the target variable"""
 
-sns.countplot(data=heart_df, x='DEATH_EVENT')
+# sns.countplot(data=heart_df, x='DEATH_EVENT')
 valores = heart_df.DEATH_EVENT.value_counts().values
-print('Don\'t Died: {:.2f}% of cases ({:.0f})'.format(valores[0]/(valores[1]+valores[0])*100, valores[0]))
-print('Died: {:.2f}% of cases ({:.0f})'.format(valores[1]/(valores[1]+valores[0])*100, valores[1]))
-print('Proportion of the output: {:.2f}'.format(valores[0]/valores[1]))
+# print('Don\'t Died: {:.2f}% of cases ({:.0f})'.format(valores[0]/(valores[1]+valores[0])*100, valores[0]))
+# print('Died: {:.2f}% of cases ({:.0f})'.format(valores[1]/(valores[1]+valores[0])*100, valores[1]))
+# print('Proportion of the output: {:.2f}'.format(valores[0]/valores[1]))
 
 """### Correlation between variables"""
 
-plt.figure(figsize=(10,8))
-mask = np.triu(np.ones(heart_df.corr().shape[0]))
-for i in range(mask.shape[0]):
-    for j in range(mask.shape[1]):
-        if i==j:
-            mask[i,j] = 0
-        else:
-            continue
-sns.heatmap(heart_df.corr(), annot=True, cmap='viridis', fmt='.3f')#, mask=mask)
+# plt.figure(figsize=(10,8))
+# mask = np.triu(np.ones(heart_df.corr().shape[0]))
+# for i in range(mask.shape[0]):
+#    for j in range(mask.shape[1]):
+#        if i==j:
+#            mask[i,j] = 0
+#        else:
+#            continue
+# sns.heatmap(heart_df.corr(), annot=True, cmap='viridis', fmt='.3f')#, mask=mask)
 
 """### Features correlations for pearson's score higher than 0.1 (absolute)"""
 
-plt.figure(figsize=(10,8))
-sns.heatmap(heart_df.corr()[np.abs(heart_df.corr()) > 0.1] , annot=True, cmap='viridis', fmt='.3f')#, mask=mask)
+#plt.figure(figsize=(10,8))
+#sns.heatmap(heart_df.corr()[np.abs(heart_df.corr()) > 0.1], annot=True, cmap='viridis', fmt='.3f')#, mask=mask)
 
 """### Dropping features with less than 1% of correlation with our target"""
 
 bigger_than_1perc = np.abs(heart_df.corr()['DEATH_EVENT']) > 0.01
 new_features_list = heart_df.corr()[bigger_than_1perc]['DEATH_EVENT'].index.to_list()
 heart_df_new = heart_df[new_features_list]
-heart_df_new.head()
+#heart_df_new.head()
 
 """### Checking the mean values for the features relative to the DEATH_EVENT variable
 * There are slightly differences between the two outputs for DEATH_EVENT
 """
 
-heart_df_new.groupby(['DEATH_EVENT']).mean()
+#heart_df_new.groupby(['DEATH_EVENT']).mean()
 
 """### Looking at variance for continuous features
 * The values are in a very different scale, for some Machine Learning models the feature scaling will be necessary
@@ -126,36 +125,36 @@ heart_df_new.groupby(['DEATH_EVENT']).mean()
 # Observando a variância das features contínuas
 a = heart_df_new[['age','creatinine_phosphokinase','ejection_fraction','platelets','serum_creatinine','serum_sodium','time']].var()
 make_float = lambda x: "{:.2f}".format(x)
-a.apply(make_float)
+a = a.apply(make_float)
 
 """### Looking at features Histograms"""
 
-fig = plt.figure(figsize=(16,10))
-fig.suptitle('Histogram for all features', fontsize=14, ha='center')
+fighist = plt.figure(figsize=(16,10))
+fighist.suptitle('Histogram for all features', fontsize=14, ha='center')
 count = 1
 for column in heart_df_new.columns.to_list():
-    ax = fig.add_subplot(3,4,count)
+    ax = fighist.add_subplot(3,4,count)
     ax.set_title(f'{column}')
-    sns.histplot(data=heart_df_new, x=column, ax=ax)
+    sns.histplot(data=heart_df_new, x=column, ax=ax, color='orange')
     count+=1
-fig.tight_layout(pad=1.5)
-fig.subplots_adjust(top=.915)
-plt.show()
+fighist.tight_layout(pad=1.5)
+fighist.subplots_adjust(top=.915)
+#plt.show()
 
 """### Looking at Boxplots for continuous features
 * There are some outliers that need to be removed to not mess with our classification model
 """
 
-fig = plt.figure(figsize=(16,10))
-fig.suptitle('Boxplot for continuous features', fontsize=14, ha='center')
+figbox = plt.figure(figsize=(16,10))
+figbox.suptitle('Boxplot for continuous features', fontsize=14, ha='center')
 count = 1
 columns_continuous = ['age','creatinine_phosphokinase','ejection_fraction','platelets','serum_creatinine','serum_sodium','time']
 for column in columns_continuous:
     #plt.subplot(7,2,count)
-    ax = fig.add_subplot(2,4,count)
+    ax = figbox.add_subplot(2,4,count)
     ax.set_title(f'{column}')
-    sns.boxplot(data=heart_df_new, y=column, ax=ax)
-    count+=1
-fig.tight_layout(pad=1.5)
-fig.subplots_adjust(top=.915)
-plt.show()
+    sns.boxplot(data=heart_df_new, y=column, ax=ax, color='orange')
+    count += 1
+figbox.tight_layout(pad=1.5)
+figbox.subplots_adjust(top=.915)
+#plt.show()

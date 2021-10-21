@@ -20,6 +20,7 @@ from sklearn.metrics import auc, roc_curve
 from sklearn.metrics import RocCurveDisplay
 from sklearn.ensemble import RandomForestClassifier
 import joblib as job
+from eda import heart_df,heart_df_new, columns_continuous
 warnings.filterwarnings('ignore')
 
 """## Removing noise from data
@@ -61,54 +62,88 @@ def remove_outliers(df, continuous_features=None, outliers_index=False):
 
 heart_df_no_outlier, outliers_ind = remove_outliers(heart_df_new, columns_continuous, outliers_index=True)
 
-outliers = heart_df[outliers_ind]
-outliers
+#outliers = heart_df[outliers_ind]
+#outliers
 
-outliers.DEATH_EVENT.value_counts()
+#outliers.DEATH_EVENT.value_counts()
 
-sns.countplot(data=heart_df_no_outlier, x='DEATH_EVENT')
-valores = heart_df_no_outlier.DEATH_EVENT.value_counts().values
-print('Não morreram: {:.2f}% dos casos'.format(valores[0]/(valores[1]+valores[0])*100))
-print('Morreram: {:.2f}% dos casos'.format(valores[1]/(valores[1]+valores[0])*100))
-print('Proporção: {:.2f}'.format(valores[0]/valores[1]))
+fignout = plt.figure()
+ax = fignout.add_subplot(1,1,1)
+cplot = sns.countplot(data=heart_df_no_outlier, x='DEATH_EVENT', ax=ax)
+valoresnout = heart_df_no_outlier.DEATH_EVENT.value_counts().values
+# print('Não morreram: {:.2f}% dos casos'.format(valoresnout[0]/(valoresnout[1]+valoresnout[0])*100))
+# print('Morreram: {:.2f}% dos casos'.format(valoresnout[1]/(valoresnout[1]+valoresnout[0])*100))
+# print('Proporção: {:.2f}'.format(valoresnout[0]/valoresnout[1]))
 
-fig = plt.figure(figsize=(10,35))
-fig.suptitle('Boxplot comparison for data with and without outliers', fontsize=16, x = 0.545)#, dpi=300)
+figboxnout = plt.figure(figsize=(10,35))
+figboxnout.suptitle('Boxplot comparison for data with and without outliers', fontsize=16, x = 0.545)#, dpi=300)
 count = 1
 for column in columns_continuous:
     #plt.subplot(7,2,count)
-    ax = fig.add_subplot(7,2,count)
+    ax = figboxnout.add_subplot(7,2,count)
     ax.set_title('With Outliers')
     sns.boxplot(data=heart_df, y=column, ax=ax)
     count+=1
     #plt.subplot(7,2,count)
-    ax = fig.add_subplot(7,2,count)
+    ax = figboxnout.add_subplot(7,2,count)
     ax.set_title('Without Outliers')
     sns.boxplot(data=heart_df_no_outlier, y=column, color='orange', ax=ax)
-    count+=1
-fig.tight_layout(pad = 1.5)
-fig.subplots_adjust(top=.96)
-plt.show()
+    count +=1
+figboxnout.tight_layout(pad = 1.5)
+figboxnout.subplots_adjust(top=.96)
+#plt.show()
 
-fig = plt.figure(figsize=(12,35))
-fig.suptitle('Histogram comparison for data with and without outliers', fontsize=16, x = 0.545)#, dpi=300)
+fighistnout = plt.figure(figsize=(12,35))
+fighistnout.suptitle('Histogram comparison for data with and without outliers', fontsize=16, x = 0.545)#, dpi=300)
 count = 1
 
 for column in columns_continuous:
-    ax = fig.add_subplot(7,2,count)
+    ax = fighistnout.add_subplot(7,2,count)
     ax.set_title(f'With Outliers (Mean: {heart_df_new[column].mean()})')
     #sns.histplot(data=heart_df_new, x=column, hue='DEATH_EVENT', kde=True, ax = ax)
-    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 0][column], bins=15, ax=ax)
-    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 1][column], bins=15, ax=ax)
+    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 0][column], bins=15, ax=ax, label='Não Faleceu')
+    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 1][column], bins=15, ax=ax, label='Faleceu')
+    plt.legend()
     count+=1
 
-    ax = fig.add_subplot(7,2,count)
+    ax = fighistnout.add_subplot(7,2,count)
     ax.set_title(f'Without Outliers (Mean: {heart_df_no_outlier[column].mean()})')
     #sns.histplot(data=heart_df_no_outlier, x=column, hue='DEATH_EVENT', color='orange', kde=True, ax = ax)
-    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 0][column], bins=15, ax=ax)
-    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 1][column], bins=15,ax=ax)
+    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 0][column], bins=15, ax=ax, label='Não Faleceu')
+    sns.distplot(a=heart_df_no_outlier[heart_df_no_outlier['DEATH_EVENT'] == 1][column], bins=15,ax=ax, label='Faleceu')
+    plt.legend()
     count+=1
 
-fig.tight_layout(pad = 1.5)
-fig.subplots_adjust(top=.96)
-plt.show()
+fighistnout.tight_layout(pad = 1.5)
+fighistnout.subplots_adjust(top=.96)
+#plt.show()
+
+remove_outliers_code = """
+def remove_outliers(df, continuous_features=None, outliers_index=False):
+
+    if continuous_features:
+        features_list = continuous_features
+    else:
+        features_list = df.columns.to_list()
+    boolean_mask = np.array([])
+    print(df.shape)
+
+    for feature in features_list:
+        mean = df[feature].mean()
+        std = df[feature].std()
+        upper = mean + 3*std
+        lower = mean - 3*std
+        mask_f = (df[feature] < upper) & (df[feature] > lower)
+        if feature == features_list[0]:
+            boolean_mask = mask_f
+        else:
+            boolean_mask = np.vstack((boolean_mask,mask_f.values))
+
+    no_outlier_idx = np.all(boolean_mask.T, axis=1)
+    df_no_outlier = df[no_outlier_idx]
+    print(df_no_outlier.shape)
+    if outliers_index:
+        return df_no_outlier, ~no_outlier_idx
+    else:
+        return df_no_outlier
+"""
